@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Relógio Double — Monitor Blaze Double</title>
+  <meta name="description" content="Monitor near-real-time do Blaze Double. Lab educativo. Double é RNG." />
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+  <div class="container">
+    <nav class="nav">
+      <div class="logo">Relógio <span>Double</span></div>
+      <div class="nav-actions" id="nav-actions">
+        <button class="btn btn-ghost" data-goto="login">Entrar</button>
+        <button class="btn btn-primary" data-goto="register">Criar conta</button>
+      </div>
+    </nav>
+
+    <div class="disclaimer" id="global-disclaimer">
+      <strong>Aviso fixo:</strong> Double é RNG (gerador de números aleatórios). Este app <strong>não</strong> faz apostas reais,
+      <strong>não</strong> faz login na Blaze, <strong>não</strong> envia sinais via Telegram e <strong>não</strong> garante lucro.
+      Uso estritamente educativo / laboratório simulado.
+    </div>
+
+    <!-- LANDING -->
+    <section id="view-landing">
+      <div class="hero">
+        <div>
+          <span class="badge">MVP SaaS · near-real-time</span>
+          <h1>Monitore o Double com previsões travadas e lab de gale simulado</h1>
+          <p>
+            Cores ao vivo, estatísticas de acerto do modelo, e simulador de banca (G0/G1/G2)
+            para estudar padrões — sem automação de apostas e sem integração de conta Blaze.
+          </p>
+          <div style="display:flex;gap:0.6rem;flex-wrap:wrap;margin-top:1rem">
+            <button class="btn btn-primary" data-goto="register">Começar</button>
+            <button class="btn" data-goto="pricing">Ver preço</button>
+          </div>
+        </div>
+        <div class="card" id="pricing-card">
+          <div class="badge">Assinatura mensal</div>
+          <div class="price">R$ 29,90 <small>/mês via PIX</small></div>
+          <p style="color:var(--muted);font-size:0.9rem">Acesso ao dashboard ao vivo para assinantes. Pagamento Mercado Pago PIX.</p>
+          <button class="btn btn-primary" style="width:100%" data-goto="register">Assinar</button>
+        </div>
+      </div>
+      <div class="grid-3">
+        <div class="card feature"><h3>Collector</h3><p>Coleta contínua de rodadas públicas enquanto o servidor roda.</p></div>
+        <div class="card feature"><h3>Modelo</h3><p>TensorFlow.js + fallback logístico. Previsão travada por rodada.</p></div>
+        <div class="card feature"><h3>Lab Gale</h3><p>Banca simulada R$1100, stakes G0/G1/G2, cooldown após G2.</p></div>
+      </div>
+    </section>
+
+    <!-- AUTH -->
+    <section id="view-login" class="hidden">
+      <h2>Entrar</h2>
+      <form class="form" id="form-login">
+        <label>Email<input type="email" name="email" required /></label>
+        <label>Senha<input type="password" name="password" required minlength="8" /></label>
+        <div class="error hidden" id="login-error"></div>
+        <button class="btn btn-primary" type="submit">Entrar</button>
+      </form>
+      <p style="color:var(--muted)">Não tem conta? <a href="#" data-goto="register">Cadastre-se</a></p>
+    </section>
+
+    <section id="view-register" class="hidden">
+      <h2>Criar conta</h2>
+      <form class="form" id="form-register">
+        <label>Email<input type="email" name="email" required /></label>
+        <label>Senha (mín. 8)<input type="password" name="password" required minlength="8" /></label>
+        <div class="error hidden" id="register-error"></div>
+        <button class="btn btn-primary" type="submit">Registrar</button>
+      </form>
+      <p style="color:var(--muted)">Já tem conta? <a href="#" data-goto="login">Entrar</a></p>
+    </section>
+
+    <!-- PAYWALL -->
+    <section id="view-paywall" class="hidden">
+      <div class="card paywall">
+        <h2>Assinatura necessária</h2>
+        <p style="color:var(--muted)">Para acessar o dashboard ao vivo, assine por <strong>R$ 29,90/mês</strong> via PIX.</p>
+        <div class="disclaimer">Double é RNG. Sem apostas reais, sem login na Blaze, sem sinais Telegram, sem garantia de lucro.</div>
+        <button class="btn btn-primary" id="btn-checkout">Gerar PIX (Mercado Pago)</button>
+        <div id="checkout-result" class="hidden" style="margin-top:1rem;text-align:left">
+          <p id="checkout-status"></p>
+          <div class="qr hidden" id="qr-wrap"><img id="qr-img" alt="QR Code PIX" /></div>
+          <p class="mono" id="pix-copy"></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- DASHBOARD -->
+    <section id="view-dashboard" class="hidden">
+      <div class="tabs">
+        <button class="btn active" data-dash="live">Ao vivo</button>
+        <button class="btn" data-dash="gale">Lab Gale</button>
+        <button class="btn hidden" data-dash="admin" id="tab-admin">Admin</button>
+      </div>
+      <div id="dash-live">
+        <div class="row">
+          <div class="card">
+            <h3 class="section-title">Previsão travada</h3>
+            <div class="pred-box">
+              <div class="dot" id="pred-dot"></div>
+              <div>
+                <div class="big" id="pred-color">—</div>
+                <div>Confiança: <strong id="pred-conf">—</strong></div>
+                <div class="lock">🔒 travada até a próxima rodada · <span id="pred-model"></span></div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <h3 class="section-title">Acurácia</h3>
+            <div class="row">
+              <div class="stat"><div class="n" id="acc-pct">—</div><div class="l">acerto</div></div>
+              <div class="stat"><div class="n" id="acc-n">—</div><div class="l">amostras</div></div>
+              <div class="stat"><div class="n" id="rounds-n">—</div><div class="l">rodadas</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="card" style="margin-top:1rem">
+          <h3 class="section-title">Cores recentes</h3>
+          <div class="colors" id="color-strip"></div>
+        </div>
+        <div class="card" style="margin-top:1rem">
+          <h3 class="section-title">Histórico com confiança</h3>
+          <div style="overflow-x:auto">
+            <table class="table" id="pred-table">
+              <thead><tr><th>Previsto</th><th>Real</th><th>Confiança</th><th>OK?</th><th>Modelo</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div id="dash-gale" class="hidden">
+        <div class="card">
+          <h3 class="section-title">Banca simulada</h3>
+          <p style="color:var(--muted);font-size:0.9rem">Inicial R$1100 · stake ~1% · G0/G1/G2 · branco = skip · perda em G2 = cooldown 30 rodadas · pending gale no próximo sinal confiante.</p>
+          <div class="row" style="margin-top:1rem">
+            <div class="stat"><div class="n" id="gale-bank">—</div><div class="l">banca</div></div>
+            <div class="stat"><div class="n" id="gale-w">—</div><div class="l">wins</div></div>
+            <div class="stat"><div class="n" id="gale-l">—</div><div class="l">losses</div></div>
+            <div class="stat"><div class="n" id="gale-stakes">—</div><div class="l">G0/G1/G2</div></div>
+          </div>
+          <div style="overflow-x:auto;margin-top:1rem">
+            <table class="table" id="gale-table">
+              <thead><tr><th>#</th><th>Gale</th><th>Stake</th><th>Prev</th><th>Real</th><th>Resultado</th><th>Conf.</th><th>Banca</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div id="dash-admin" class="hidden">
+        <div class="row">
+          <div class="card">
+            <h3 class="section-title">Collector</h3>
+            <pre class="mono" id="admin-collector" style="white-space:pre-wrap"></pre>
+          </div>
+          <div class="card">
+            <h3 class="section-title">Overview</h3>
+            <pre class="mono" id="admin-overview" style="white-space:pre-wrap"></pre>
+          </div>
+        </div>
+        <div class="card" style="margin-top:1rem">
+          <h3 class="section-title">Usuários</h3>
+          <div style="overflow-x:auto">
+            <table class="table" id="admin-users">
+              <thead><tr><th>Email</th><th>Role</th><th>paid_until</th><th>Ações</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card" style="margin-top:1rem">
+          <h3 class="section-title">Pagamentos</h3>
+          <div style="overflow-x:auto">
+            <table class="table" id="admin-payments">
+              <thead><tr><th>ID</th><th>User</th><th>Status</th><th>Valor</th><th>Criado</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer class="footer">
+      Relógio Double · MVP educativo · Double é RNG · sem apostas reais · sem login Blaze · sem Telegram · sem garantia de lucro
+    </footer>
+  </div>
+  <script src="/js/app.js"></script>
+</body>
+</html>
