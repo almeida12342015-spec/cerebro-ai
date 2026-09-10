@@ -60,7 +60,11 @@ Veja `.env.example`:
 | `MERCADOPAGO_ACCESS_TOKEN` | não | Sem token → checkout **stub**; admin libera dias manualmente |
 | `DATABASE_PATH` | não | Default `./data/cerebro.db` |
 | `COLLECTOR_INTERVAL_MS` | não | Default `5000` |
-| `FALLBACK_HISTORY_URL` | não | Proxy/espelho se a API Blaze falhar |
+| `FALLBACK_HISTORY_URL` | não | Espelho(s) de histórico (vírgula-separado) se a API Blaze falhar |
+| `BLAZE_HTTP_PROXY` | não | Proxy HTTP(S) com saída BR (também aceita `HTTPS_PROXY`) |
+| `INGEST_SECRET` | não | Habilita `POST /api/ingest/rounds` (relé BR). Sem valor → endpoint 503 |
+| `TARGET_URL` | só no relé | URL do backend para `scripts/br-relay.mjs` |
+| `INTERVAL_MS` | só no relé | Intervalo do relé (default `5000`) |
 
 ## Primeiro admin
 
@@ -91,14 +95,54 @@ Se `MERCADOPAGO_ACCESS_TOKEN` estiver vazio:
 
 ## Coletor Blaze
 
-Enquanto o servidor roda, um loop busca o histórico/current da API pública do Double:
+Enquanto o servidor roda, um loop busca o histórico/current da API pública do Double, tentando nesta ordem:
 
-- Primário: `blaze.bet.br/api/singleplayer-originals/...`
-- Fallback: `FALLBACK_HISTORY_URL` (documentado; pode apontar para proxy)
+1. `blaze.bet.br/.../roulette_games/recent/history/1`
+2. `blaze.bet.br/.../roulette_games/current/1`
+3. `blaze.com/api/roulette_games/recent`
+4. `blaze.com/api/roulette_games/current`
+5. URLs em `FALLBACK_HISTORY_URL` (lista separada por vírgula)
+
+Headers usam `Accept-Language: pt-BR`, `Origin`/`Referer` de `blaze.bet.br` e User-Agent de navegador.
 
 Rodadas novas são persistidas em SQLite; o modelo é atualizado; uma previsão **travada** é registrada para a próxima rodada.
 
 Em desenvolvimento, se a API estiver inacessível e o banco estiver vazio, um histórico **sintético DEV** pode ser semeado (não é dado real da Blaze).
+
+## Fallback / geo-block
+
+A Blaze bloqueia muitos IPs de datacenter nos EUA. No **Render (Oregon)** o coletor costuma receber **HTTP 451** com **code 1016** e não consegue ler o histórico.
+
+Opções (escolha uma):
+
+### (a) Relé brasileiro — `scripts/br-relay.mjs` (recomendado)
+
+Rode o script em uma máquina/rede no Brasil. Ele consulta a Blaze localmente e faz `POST` das rodadas novas no backend na nuvem.
+
+1. No servidor (Render/Fly), defina `INGEST_SECRET` com uma string longa e aleatória.
+2. Na máquina BR:
+
+```bash
+export TARGET_URL="https://seu-app.onrender.com"
+export INGEST_SECRET="mesma-chave-do-servidor"
+export INTERVAL_MS=5000   # opcional
+node scripts/br-relay.mjs
+```
+
+Endpoint: `POST {TARGET_URL}/api/ingest/rounds` com header `X-Ingest-Secret` (ou `Authorization: Bearer …`).  
+Sem `INGEST_SECRET` no servidor o endpoint responde **503**; secret errado → **401**.
+
+### (b) Espelho / proxy de histórico
+
+Defina `FALLBACK_HISTORY_URL` apontando para um espelho JSON que devolva o mesmo formato (array de `{ id, roll, color, created_at }`). Várias URLs: separe por vírgula.
+
+### (c) Proxy HTTP com saída no Brasil
+
+Defina `BLAZE_HTTP_PROXY` (ou `HTTPS_PROXY`) com a URL de um proxy cuja saída seja BR. O coletor usa `undici.ProxyAgent` (Node 20).
+
+```bash
+BLAZE_HTTP_PROXY=http://usuario:senha@proxy-br.exemplo:8080
+```
 
 ## Lab Gale (simulado)
 
@@ -141,6 +185,8 @@ cerebro-ai/
 ├── README.md
 ├── render.yaml
 ├── fly.toml
+├── scripts/
+│   └── br-relay.mjs  # relé BR → /api/ingest/rounds
 ├── public/           # UI pt-BR
 │   ├── index.html
 │   ├── css/app.css
@@ -151,14 +197,14 @@ cerebro-ai/
     ├── auth/
     ├── db/
     ├── middleware/
-    ├── routes/
+    ├── routes/       # auth, payments, dashboard, admin, ingest
     ├── services/     # collector, predictor, MP, gale
     └── types/
 ```
 
 ## Limitações conhecidas
 
-- A API Blaze pode bloquear IPs de datacenter; use `FALLBACK_HISTORY_URL` ou rode o collector em rede residencial.
+- A API Blaze bloqueia IPs de cloud US (ex. Render Oregon → 451/1016); use o relé BR, `FALLBACK_HISTORY_URL` ou `BLAZE_HTTP_PROXY` (veja **Fallback / geo-block**).
 - `tfjs-node` exige binários nativos; em alguns free-tiers o fallback logístico é usado automaticamente.
 - SQLite + múltiplas instâncias: use **uma** réplica / um processo.
 - Webhook MP precisa de URL pública HTTPS.
